@@ -1,147 +1,97 @@
 "use client";
 
-import { useState, ChangeEvent } from "react";
+import { useState, ChangeEvent, useEffect } from "react";
+import { Issue } from "../type";
 
-export type Issue = {
-  id: string;
-  name: string;
-  message: string;
-  status: "open" | "resolved";
-  numEvents: number;
-  numUsers: number;
-  value: number;
-};
-
-type CheckedState = {
-  checked: boolean;
-  backgroundColor: string;
-};
-
+// Props for the Table component
 type TableProps = {
   issues: Issue[];
 };
 
 const Table = ({ issues }: TableProps) => {
-  const [checkedState, setCheckedState] = useState<CheckedState[]>(
-    new Array(issues.length).fill({
-      checked: false,
-      backgroundColor: "#ffffff",
-    })
+  // Tracks checkbox state for each issue
+  const [checked, setChecked] = useState<boolean[]>(
+    new Array(issues.length).fill(false)
   );
-  const [selectDeselectAllIsChecked, setSelectDeselectAllIsChecked] =
-    useState(false);
-  const [numCheckboxesSelected, setNumCheckboxesSelected] = useState(0);
+  // Tracks the state of the "select all" checkbox
+  const [selectAll, setSelectAll] = useState(false);
+  // Sum of values of all selected and open issues
+  const [totalSelectedValue, setTotalSelectedValue] = useState(0);
 
-  const handleOnChange = (position: number): void => {
-    const updatedCheckedState = checkedState.map((element, index) => {
-      if (position === index) {
-        return {
-          ...element,
-          checked: !element.checked,
-          backgroundColor: element.checked ? "#ffffff" : "#eeeeee",
-        };
-      }
-      return element;
-    });
-    setCheckedState(updatedCheckedState);
+  // Whenever individual checkboxes update, evaluate indeterminate state
+  useEffect(() => {
+    updateIndeterminateState();
+  }, [checked]);
 
-    const totalSelected = updatedCheckedState
-      .map((element) => element.checked)
-      .reduce((sum, currentState, index) => {
-        if (currentState) {
-          return sum + issues[index].value;
-        }
-        return sum;
-      }, 0);
-    setNumCheckboxesSelected(totalSelected);
-
-    handleIndeterminateCheckbox(totalSelected);
+  // Toggle individual issue checkbox
+  const handleCheckboxChange = (index: number): void => {
+    const updatedChecked = [...checked];
+    updatedChecked[index] = !updatedChecked[index];
+    setChecked(updatedChecked);
+    updateTotalSelectedValue(updatedChecked);
   };
 
-  const handleIndeterminateCheckbox = (total: number): void => {
-    const indeterminateCheckbox = document.getElementById(
-      "custom-checkbox-selectDeselectAll"
+  // Recalculate the sum of selected issue values
+  const updateTotalSelectedValue = (checkedArray: boolean[]): void => {
+    const total = checkedArray.reduce(
+      (sum, isChecked, i) =>
+        isChecked && issues[i].status === "open" ? sum + issues[i].value : sum,
+      0
+    );
+    setTotalSelectedValue(total);
+  };
+
+  // Handler for the "select all" checkbox
+  const handleSelectAll = (e: ChangeEvent<HTMLInputElement>): void => {
+    const isChecked = e.target.checked;
+    setSelectAll(isChecked);
+
+    // Only select open issues
+    const updatedChecked = issues.map((issue) =>
+      issue.status === "open" ? isChecked : false
+    );
+    setChecked(updatedChecked);
+    updateTotalSelectedValue(updatedChecked);
+  };
+
+  // Updates indeterminate state for the master checkbox
+  const updateIndeterminateState = () => {
+    const checkbox = document.getElementById(
+      "select-all"
     ) as HTMLInputElement | null;
+    if (!checkbox) return;
 
-    if (!indeterminateCheckbox) return;
+    const openIssuesCount = issues.filter((i) => i.status === "open").length;
+    const selectedOpen = checked.filter(
+      (_, i) => issues[i].status === "open" && checked[i]
+    ).length;
 
-    let count = 0;
-
-    issues.forEach((element) => {
-      if (element.status === "open") {
-        count += 1;
-      }
-    });
-
-    if (total === 0) {
-      indeterminateCheckbox.indeterminate = false;
-      setSelectDeselectAllIsChecked(false);
-    }
-    if (total > 0 && total < count) {
-      indeterminateCheckbox.indeterminate = true;
-      setSelectDeselectAllIsChecked(false);
-    }
-    if (total === count) {
-      indeterminateCheckbox.indeterminate = false;
-      setSelectDeselectAllIsChecked(true);
-    }
-  };
-
-  const handleSelectDeselectAll = (
-    event: ChangeEvent<HTMLInputElement>
-  ): void => {
-    const { checked } = event.target;
-
-    const allTrueArray: CheckedState[] = [];
-    issues.forEach((element) => {
-      if (element.status === "open") {
-        allTrueArray.push({ checked: true, backgroundColor: "#eeeeee" });
-      } else {
-        allTrueArray.push({ checked: false, backgroundColor: "#ffffff" });
-      }
-    });
-
-    const allFalseArray: CheckedState[] = new Array(issues.length).fill({
-      checked: false,
-      backgroundColor: "#ffffff",
-    });
-
-    setCheckedState(checked ? allTrueArray : allFalseArray);
-
-    const totalSelected = (checked ? allTrueArray : allFalseArray)
-      .map((element) => element.checked)
-      .reduce((sum, currentState, index) => {
-        if (currentState && issues[index].status === "open") {
-          return sum + issues[index].value;
-        }
-        return sum;
-      }, 0);
-    setNumCheckboxesSelected(totalSelected);
-    setSelectDeselectAllIsChecked((prevState) => !prevState);
+    checkbox.indeterminate = selectedOpen > 0 && selectedOpen < openIssuesCount;
+    setSelectAll(selectedOpen === openIssuesCount);
   };
 
   return (
     <table className="w-full border-collapse shadow-lg">
       <thead>
+        {/* Header Row: Master checkbox + selected value */}
         <tr className="border-2 border-gray-200">
           <th className="py-6 pl-6 text-left w-[48px]">
             <input
-              className="w-5 h-5 cursor-pointer"
+              id="select-all"
               type="checkbox"
-              id="custom-checkbox-selectDeselectAll"
-              name="custom-checkbox-selectDeselectAll"
-              value="custom-checkbox-selectDeselectAll"
-              checked={selectDeselectAllIsChecked}
-              onChange={handleSelectDeselectAll}
+              className="w-5 h-5 cursor-pointer"
+              checked={selectAll}
+              onChange={handleSelectAll}
             />
           </th>
           <th className="py-6 min-w-[8rem] text-left text-black">
-            {numCheckboxesSelected
-              ? `Selected ${numCheckboxesSelected}`
+            {totalSelectedValue
+              ? `Selected ${totalSelectedValue}`
               : "None selected"}
           </th>
           <th colSpan={2} />
         </tr>
+        {/* Column labels */}
         <tr className="border-2 border-gray-200">
           <th className="py-6 pl-6" />
           <th className="py-6 text-left font-medium text-black">Name</th>
@@ -149,57 +99,52 @@ const Table = ({ issues }: TableProps) => {
           <th className="py-6 text-left font-medium text-black">Status</th>
         </tr>
       </thead>
-
       <tbody>
-        {issues.map(({ name, message, status }, index) => {
-          const issueIsOpen = status === "open";
-          const onClick = issueIsOpen ? () => handleOnChange(index) : undefined;
-          const rowClasses = `${
-            issueIsOpen
+        {/* Row rendering */}
+        {issues.map(({ name, message, status }, i) => {
+          const isOpen = status === "open";
+          const rowClasses = `border-b border-gray-200 ${
+            isOpen
               ? "cursor-pointer hover:bg-blue-50 text-black"
               : "text-gray-600 cursor-not-allowed"
-          } border-b border-gray-200 ${
-            checkedState[index].checked ? "bg-blue-50" : ""
-          }`;
+          } ${checked[i] ? "bg-blue-50" : ""}`;
 
           return (
-            <tr className={rowClasses} key={index} onClick={onClick}>
+            <tr
+              key={i}
+              className={rowClasses}
+              onClick={isOpen ? () => handleCheckboxChange(i) : undefined}
+            >
               <td className="py-6 pl-6">
-                {issueIsOpen ? (
-                  <input
-                    className="w-5 h-5 cursor-pointer"
-                    type="checkbox"
-                    id={`custom-checkbox-${index}`}
-                    name={name}
-                    value={name}
-                    checked={checkedState[index].checked}
-                    onChange={() => handleOnChange(index)}
-                  />
-                ) : (
-                  <input
-                    className="w-5 h-5 opacity-50"
-                    type="checkbox"
-                    disabled
-                  />
-                )}
+                <input
+                  type="checkbox"
+                  className={`w-5 h-5 ${
+                    !isOpen ? "opacity-50" : "cursor-pointer"
+                  }`}
+                  disabled={!isOpen}
+                  checked={checked[i]}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    handleCheckboxChange(i);
+                  }}
+                />
               </td>
               <td className="py-6">{name}</td>
               <td className="py-6">{message}</td>
               <td className="py-6">
                 <div className="flex items-center gap-2">
-                  {issueIsOpen ? (
-                    <>
-                      <span className="inline-block w-[15px] h-[15px] rounded-full bg-blue-600" />
-                      <span className="text-blue-700 font-medium">Open</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="inline-block w-[15px] h-[15px] rounded-full bg-gray-400" />
-                      <span className="text-gray-700 font-medium">
-                        Resolved
-                      </span>
-                    </>
-                  )}
+                  <span
+                    className={`inline-block w-[15px] h-[15px] rounded-full ${
+                      isOpen ? "bg-blue-600" : "bg-gray-400"
+                    }`}
+                  />
+                  <span
+                    className={`font-medium ${
+                      isOpen ? "text-blue-700" : "text-gray-700"
+                    }`}
+                  >
+                    {isOpen ? "Open" : "Resolved"}
+                  </span>
                 </div>
               </td>
             </tr>
@@ -211,3 +156,10 @@ const Table = ({ issues }: TableProps) => {
 };
 
 export default Table;
+
+// Refactor Notes:
+// - Removed unnecessary backgroundColor tracking; CSS classes handle row color.
+// - Replaced `CheckedState` object with a simpler `boolean[]` for clarity.
+// - Extracted reusable logic into helpers like `updateTotalSelectedValue`.
+// - Used `useEffect` to manage indeterminate checkbox state.
+// - Preserved original design and layout 100%.

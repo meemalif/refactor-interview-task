@@ -1,7 +1,9 @@
-import Table, { Issue } from "./components/table";
+// src/app/page.tsx
+import Table from "./components/table";
 import issuesData from "./constants/issues.json";
+import { Issue } from "./type";
 
 export default function Home() {
-  const issues: Issue[] = issuesData as Issue[];
+  const issues = issuesData as Issue[];
   return <Table issues={issues} />;
 }
